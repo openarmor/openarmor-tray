@@ -1,34 +1,74 @@
 use std::sync::mpsc;
 use tray_item::{IconSource, TrayItem};
+use std::process::Command;
 
 enum Message {
     Quit,
-    ChangeIcon,
+    CheckAgents,
     Hello,
 }
 
 enum Icon {
-    Red,
-    Green,
+    NoAgents,
+    OssecOnly,
+    OsqueryOnly,
+    BothAgents,
 }
 
 impl Icon {
     fn resource(&self) -> IconSource {
         match self {
-            Self::Red => IconSource::Resource("another-name-from-rc-file"),
-            Self::Green => IconSource::Resource("name-of-icon-in-rc-file"),
+            Self::NoAgents => IconSource::Resource("icon-no-agents"),
+            Self::OssecOnly => IconSource::Resource("icon-ossec-only"),
+            Self::OsqueryOnly => IconSource::Resource("icon-osquery-only"),
+            Self::BothAgents => IconSource::Resource("icon-both-agents"),
         }
     }
 }
 
+fn check_agent_installed(agent: &str) -> bool {
+    let output = Command::new("cmd")
+        .args(&["/C", "where", agent])
+        .output()
+        .expect("Failed to execute command");
+    
+    output.status.success()
+}
+
+fn check_service_running(service: &str) -> bool {
+    let output = Command::new("sc")
+        .args(&["query", service])
+        .output()
+        .expect("Failed to execute command");
+
+    String::from_utf8_lossy(&output.stdout).contains("RUNNING")
+}
+
+fn get_current_icon() -> Icon {
+    let ossec_installed = check_agent_installed("ossec-agent.exe") || check_agent_installed("wazuh-agent.exe");
+    let osquery_installed = check_agent_installed("osqueryd.exe");
+
+    // Additional check for running services
+    let ossec_running = check_service_running("OssecSvc") || check_service_running("WazuhSvc");
+    let osquery_running = check_service_running("osqueryd");
+
+    match (ossec_installed && ossec_running, osquery_installed && osquery_running) {
+        (true, true) => Icon::BothAgents,
+        (true, false) => Icon::OssecOnly,
+        (false, true) => Icon::OsqueryOnly,
+        (false, false) => Icon::NoAgents,
+    }
+}
+
 fn main() {
+    let current_icon = get_current_icon();
     let mut tray = TrayItem::new(
-        "Tray Example",
-        Icon::Green.resource(),
+        "Agent Status",
+        current_icon.resource(),
     )
     .unwrap();
 
-    let label_id = tray.inner_mut().add_label_with_id("Tray Label").unwrap();
+    let label_id = tray.inner_mut().add_label_with_id("Agent Status").unwrap();
 
     tray.inner_mut().add_separator().unwrap();
 
@@ -40,12 +80,11 @@ fn main() {
     })
     .unwrap();
 
-    let color_tx = tx.clone();
-    let color_id = tray.inner_mut().add_menu_item_with_id("Change to Red", move || {
-        color_tx.send(Message::ChangeIcon).unwrap();
+    let check_tx = tx.clone();
+    tray.add_menu_item("Check Agents", move || {
+        check_tx.send(Message::CheckAgents).unwrap();
     })
     .unwrap();
-    let mut current_icon = Icon::Green;
 
     tray.inner_mut().add_separator().unwrap();
 
@@ -61,16 +100,17 @@ fn main() {
                 println!("Quit");
                 break;
             }
-            Ok(Message::ChangeIcon) => {
-                let (next_icon, next_message) = match current_icon {
-                    Icon::Red => (Icon::Green, "Change to Red"),
-                    Icon::Green => (Icon::Red, "Change to Green"),
+            Ok(Message::CheckAgents) => {
+                let new_icon = get_current_icon();
+                tray.set_icon(new_icon.resource()).unwrap();
+                
+                let status_message = match new_icon {
+                    Icon::NoAgents => "No agents installed or running",
+                    Icon::OssecOnly => "OSSEC/Wazuh agent installed and running",
+                    Icon::OsqueryOnly => "osquery installed and running",
+                    Icon::BothAgents => "Both agents installed and running",
                 };
-                current_icon = next_icon;
-
-                tray.inner_mut().set_menu_item_label(next_message, color_id).unwrap();
-                tray.set_icon(current_icon.resource())
-                    .unwrap();
+                tray.inner_mut().set_label(status_message, label_id).unwrap();
             },
             Ok(Message::Hello) => {
                 tray.inner_mut().set_label("Hi there!", label_id).unwrap();
