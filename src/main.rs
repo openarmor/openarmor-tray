@@ -3,7 +3,7 @@ use std::thread;
 use std::time::Duration;
 use tray_item::{IconSource, TrayItem};
 use std::process::Command;
-use winrt_notification::{Duration as ToastDuration, Toast};
+use notify_rust::Notification;
 
 enum Message {
     Quit,
@@ -79,49 +79,46 @@ fn get_icon(status: &AgentStatus) -> Icon {
     }
 }
 
-fn send_notification(title: &str, body: &str) {
-    Toast::new(Toast::POWERSHELL_APP_ID)
-        .title(title)
-        .text1(body)
-        .duration(ToastDuration::Short)
-        .show()
-        .expect("Failed to send notification");
+fn send_notification(title: &str, body: &str) -> Result<(), Box<dyn std::error::Error>> {
+    Notification::new()
+        .summary(title)
+        .body(body)
+        .icon("security-high")  // You may want to change this to an appropriate icon
+        .timeout(5000)  // 5 seconds
+        .show()?;
+    Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut current_status = get_current_status();
     let current_icon = get_icon(&current_status);
     let mut tray = TrayItem::new(
         "Agent Status",
         current_icon.resource(),
-    )
-    .unwrap();
+    )?;
 
-    let label_id = tray.inner_mut().add_label_with_id("Agent Status").unwrap();
+    let label_id = tray.inner_mut().add_label_with_id("Agent Status")?;
 
-    tray.inner_mut().add_separator().unwrap();
+    tray.inner_mut().add_separator()?;
 
-    let (tx, rx) = mpsc::sync_channel(1);
+    let (tx, rx) = mpsc::channel();
 
     let hello_tx = tx.clone();
     tray.add_menu_item("Hello!", move || {
         hello_tx.send(Message::Hello).unwrap();
-    })
-    .unwrap();
+    })?;
 
     let check_tx = tx.clone();
     tray.add_menu_item("Check Agents", move || {
         check_tx.send(Message::CheckAgents).unwrap();
-    })
-    .unwrap();
+    })?;
 
-    tray.inner_mut().add_separator().unwrap();
+    tray.inner_mut().add_separator()?;
 
     let quit_tx = tx.clone();
     tray.add_menu_item("Quit", move || {
         quit_tx.send(Message::Quit).unwrap();
-    })
-    .unwrap();
+    })?;
 
     // Start a thread to check status every 5 seconds
     let update_tx = tx.clone();
@@ -141,7 +138,7 @@ fn main() {
             Ok(Message::CheckAgents) | Ok(Message::UpdateStatus) => {
                 let new_status = get_current_status();
                 let new_icon = get_icon(&new_status);
-                tray.set_icon(new_icon.resource()).unwrap();
+                tray.set_icon(new_icon.resource())?;
                 
                 let status_message = match new_icon {
                     Icon::NoAgents => "No agents installed or running",
@@ -149,7 +146,7 @@ fn main() {
                     Icon::OsqueryOnly => "osquery installed and running",
                     Icon::BothAgents => "Both agents installed and running",
                 };
-                tray.inner_mut().set_label(status_message, label_id).unwrap();
+                tray.inner_mut().set_label(status_message, label_id)?;
 
                 // Check for status changes and send notifications
                 if new_status != current_status {
@@ -160,7 +157,7 @@ fn main() {
                         } else {
                             "OSSEC/Wazuh agent is no longer running"
                         };
-                        send_notification(title, body);
+                        send_notification(title, body)?;
                     }
                     if new_status.osquery_running != current_status.osquery_running {
                         let title = "osquery Status Change";
@@ -169,15 +166,17 @@ fn main() {
                         } else {
                             "osquery is no longer running"
                         };
-                        send_notification(title, body);
+                        send_notification(title, body)?;
                     }
                     current_status = new_status;
                 }
             },
             Ok(Message::Hello) => {
-                tray.inner_mut().set_label("Hi there!", label_id).unwrap();
+                tray.inner_mut().set_label("Hi there!", label_id)?;
             },
             Err(_) => break,
         }
     }
+
+    Ok(())
 }
