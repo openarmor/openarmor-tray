@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 tray-item = "*"
-notify-rust = "4"
+notify-rust = "*"
 
 [build-dependencies]
 windres = "*"

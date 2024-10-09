@@ -8,7 +8,6 @@ use notify_rust::Notification;
 enum Message {
     Quit,
     CheckAgents,
-    Hello,
     UpdateStatus,
 }
 
@@ -47,20 +46,19 @@ fn check_agent_installed(agent: &str) -> bool {
     output.status.success()
 }
 
-fn check_service_running(service: &str) -> bool {
-    let output = Command::new("sc")
-        .args(&["query", service])
+fn check_process_running(process: &str) -> bool {
+    let output = Command::new("tasklist")
         .output()
         .expect("Failed to execute command");
 
-    String::from_utf8_lossy(&output.stdout).contains("RUNNING")
+    String::from_utf8_lossy(&output.stdout).contains(process)
 }
 
 fn get_current_status() -> AgentStatus {
     let ossec_installed = check_agent_installed("ossec-agent.exe") || check_agent_installed("wazuh-agent.exe");
     let osquery_installed = check_agent_installed("osqueryd.exe");
-    let ossec_running = check_service_running("OssecSvc") || check_service_running("WazuhSvc");
-    let osquery_running = check_service_running("osqueryd");
+    let ossec_running = check_process_running("ossec-agent.exe") || check_process_running("wazuh-agent.exe");
+    let osquery_running = check_process_running("osqueryd.exe");
 
     AgentStatus {
         ossec_installed,
@@ -84,7 +82,7 @@ fn send_notification(title: &str, body: &str) -> Result<(), Box<dyn std::error::
         .summary(title)
         .body(body)
         .icon("security-high")
-        .timeout(5000)  // 5 seconds
+        .timeout(5000)
         .show()?;
     Ok(())
 }
@@ -102,11 +100,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tray.inner_mut().add_separator()?;
 
     let (tx, rx) = mpsc::channel();
-
-    let hello_tx = tx.clone();
-    tray.add_menu_item("Hello!", move || {
-        hello_tx.send(Message::Hello).unwrap();
-    })?;
 
     let check_tx = tx.clone();
     tray.add_menu_item("Check Agents", move || {
@@ -170,9 +163,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     current_status = new_status;
                 }
-            },
-            Ok(Message::Hello) => {
-                tray.inner_mut().set_label("Hi there!", label_id)?;
             },
             Err(_) => break,
         }
