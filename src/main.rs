@@ -4,7 +4,11 @@ use std::time::Duration;
 use tray_item::{IconSource, TrayItem};
 use std::path::Path;
 use std::process::Command;
-use notify_rust::Notification; // Importing the notify_rust crate
+use windows::{
+    core::HSTRING,
+    Data::Xml::Dom::XmlDocument,
+    UI::Notifications::{ToastNotification, ToastNotificationManager},
+};
 
 enum Message {
     Quit,
@@ -30,8 +34,7 @@ impl Icon {
 }
 
 fn check_agent_installed(agent_path: &str) -> bool {
-    let exists = Path::new(agent_path).exists();
-    exists
+    Path::new(agent_path).exists()
 }
 
 fn check_agent_running(process_name: &str) -> bool {
@@ -44,7 +47,6 @@ fn check_agent_running(process_name: &str) -> bool {
 }
 
 fn get_current_icon() -> Icon {
-    // Correct Wazuh path
     let wazuh_installed = check_agent_installed("C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe");
     let osquery_installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryi.exe");
 
@@ -57,6 +59,31 @@ fn get_current_icon() -> Icon {
         (false, true) => Icon::OsqueryOnly,
         (false, false) => Icon::NoAgents,
     }
+}
+
+fn send_toast_notification(title: &str, message: &str) -> windows::core::Result<()> {
+    let toast_xml = XmlDocument::new()?;
+    let xml_string = format!(
+        r#"<toast duration="short">
+            <visual>
+                <binding template="ToastGeneric">
+                    <text>{}</text>
+                    <text>{}</text>
+                </binding>
+            </visual>
+            <audio src="ms-winsoundevent:Notification.Default" />
+        </toast>"#,
+        title, message
+    );
+    toast_xml.LoadXml(&HSTRING::from(xml_string))?;
+
+    let toast = ToastNotification::CreateToastNotification(&toast_xml)?;
+    let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(
+        "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe"
+    ))?;
+
+    notifier.Show(&toast)?;
+    Ok(())
 }
 
 fn update_status(tray: &mut TrayItem, label_id: u32) {
@@ -72,19 +99,13 @@ fn update_status(tray: &mut TrayItem, label_id: u32) {
 
     tray.inner_mut().set_label(status_message, label_id).unwrap();
 
-    // Send a notification with sound
-    Notification::new()
-        .summary("Agent Status Update")  // Summary of the notification
-        .body(status_message)             // Body of the notification
-        .icon("dialog-information")       // Notification icon
-        .sound_name("message-new-instant") // Use sound_name instead of sound
-        .show()
-        .unwrap();
+    // Send a toast notification with sound
+    if let Err(e) = send_toast_notification("Agent Status Update", status_message) {
+        eprintln!("Failed to send toast notification: {:?}", e);
+    }
 }
 
-
 fn main() {
-    // Initialize the tray icon based on the current agent status
     let current_icon = get_current_icon();
     let mut tray = TrayItem::new(
         "Agent Status",
@@ -98,23 +119,20 @@ fn main() {
 
     let (tx, rx) = mpsc::sync_channel(1);
 
-    // Quit option
     let quit_tx = tx.clone();
     tray.add_menu_item("Quit", move || {
         quit_tx.send(Message::Quit).unwrap();
     })
     .unwrap();
 
-    // Periodic status update in a separate thread
     let update_tx = tx.clone();
     thread::spawn(move || {
         loop {
             update_tx.send(Message::UpdateStatus).unwrap();
-            thread::sleep(Duration::from_secs(5)); // Update every 5 seconds
+            thread::sleep(Duration::from_secs(5));
         }
     });
 
-    // Main event loop
     loop {
         match rx.recv() {
             Ok(Message::Quit) => {
