@@ -83,7 +83,7 @@ fn send_notification(title: &str, body: &str) -> Result<(), Box<dyn std::error::
     Notification::new()
         .summary(title)
         .body(body)
-        .icon("security-high")  // You may want to change this to an appropriate icon
+        .icon("security-high")
         .timeout(5000)  // 5 seconds
         .show()?;
     Ok(())
