@@ -55,31 +55,43 @@ fn check_windows_defender_status() -> bool {
     String::from_utf8_lossy(&output.stdout).trim() == "True"
 }
 
+fn get_status_emoji(running: bool) -> &'static str {
+    if running {
+        "🟢" // Green circle for running
+    } else {
+        "❌" // Red cross for not running
+    }
+}
+
 fn get_wazuh_status() -> String {
     let installed = check_agent_installed("C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe");
     let running = check_agent_running("wazuh-agent");
+    let emoji = get_status_emoji(running);
     match (installed, running) {
-        (true, true) => "Installed and running".to_string(),
-        (true, false) => "Installed but not running".to_string(),
-        (false, _) => "Not installed".to_string(),
+        (true, true) => format!("{} Installed and running", emoji),
+        (true, false) => format!("{} Installed but not running", emoji),
+        (false, _) => format!("{} Not installed", emoji),
     }
 }
 
 fn get_osquery_status() -> String {
     let installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryi.exe");
     let running = check_agent_running("osqueryd");
+    let emoji = get_status_emoji(running);
     match (installed, running) {
-        (true, true) => "Installed and running".to_string(),
-        (true, false) => "Installed but not running".to_string(),
-        (false, _) => "Not installed".to_string(),
+        (true, true) => format!("{} Installed and running", emoji),
+        (true, false) => format!("{} Installed but not running", emoji),
+        (false, _) => format!("{} Not installed", emoji),
     }
 }
 
 fn get_windows_defender_status() -> String {
-    if check_windows_defender_status() {
-        "Real-time protection enabled".to_string()
+    let running = check_windows_defender_status();
+    let emoji = get_status_emoji(running);
+    if running {
+        format!("{} Real-time protection enabled", emoji)
     } else {
-        "Real-time protection disabled".to_string()
+        format!("{} Real-time protection disabled", emoji)
     }
 }
 
