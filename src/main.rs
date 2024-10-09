@@ -29,7 +29,9 @@ impl Icon {
 }
 
 fn check_agent_installed(agent_path: &str) -> bool {
-    Path::new(agent_path).exists()
+    let exists = Path::new(agent_path).exists();
+    // println!("Checking if agent installed at {}: {}", agent_path, exists);
+    exists
 }
 
 fn check_agent_running(process_name: &str) -> bool {
@@ -42,11 +44,15 @@ fn check_agent_running(process_name: &str) -> bool {
 }
 
 fn get_current_icon() -> Icon {
+    // Correct Wazuh path
     let wazuh_installed = check_agent_installed("C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe");
-    let osquery_installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryd\\osqueryd.exe");
+    let osquery_installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryi.exe");
 
     let wazuh_running = check_agent_running("wazuh-agent");
     let osquery_running = check_agent_running("osqueryd");
+
+    // println!("Wazuh Installed: {}, Wazuh Running: {}", wazuh_installed, wazuh_running);
+    // println!("Osquery Installed: {}, Osquery Running: {}", osquery_installed, osquery_running);
 
     match (wazuh_installed && wazuh_running, osquery_installed && osquery_running) {
         (true, true) => Icon::BothAgents,
