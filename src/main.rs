@@ -30,7 +30,6 @@ impl Icon {
 
 fn check_agent_installed(agent_path: &str) -> bool {
     let exists = Path::new(agent_path).exists();
-    // println!("Checking if agent installed at {}: {}", agent_path, exists);
     exists
 }
 
@@ -50,9 +49,6 @@ fn get_current_icon() -> Icon {
 
     let wazuh_running = check_agent_running("wazuh-agent");
     let osquery_running = check_agent_running("osqueryd");
-
-    // println!("Wazuh Installed: {}, Wazuh Running: {}", wazuh_installed, wazuh_running);
-    // println!("Osquery Installed: {}, Osquery Running: {}", osquery_installed, osquery_running);
 
     match (wazuh_installed && wazuh_running, osquery_installed && osquery_running) {
         (true, true) => Icon::BothAgents,

@@ -1,5 +1,5 @@
 aa-exe-icon ICON "icons/app-icon.ico"
 icon-both-agents ICON "icons/icon-both-agents.ico"
 icon-no-agents ICON "icons/icon-no-agents.ico"
-icon-ossec-only ICON "icons/icon-both-agents.ico"
+icon-wazuh-only ICON "icons/armory.ico"
 icon-osquery-only ICON "icons/osquery.ico"
