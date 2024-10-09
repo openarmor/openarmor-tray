@@ -4,6 +4,7 @@ use std::time::Duration;
 use tray_item::{IconSource, TrayItem};
 use std::path::Path;
 use std::process::Command;
+use notify_rust::Notification; // Importing the notify_rust crate
 
 enum Message {
     Quit,
@@ -68,8 +69,19 @@ fn update_status(tray: &mut TrayItem, label_id: u32) {
         Icon::OsqueryOnly => "osquery installed and running",
         Icon::BothAgents => "Both agents installed and running",
     };
+
     tray.inner_mut().set_label(status_message, label_id).unwrap();
+
+    // Send a notification with sound
+    Notification::new()
+        .summary("Agent Status Update")  // Summary of the notification
+        .body(status_message)             // Body of the notification
+        .icon("dialog-information")       // Notification icon
+        .sound_name("message-new-instant") // Use sound_name instead of sound
+        .show()
+        .unwrap();
 }
+
 
 fn main() {
     // Initialize the tray icon based on the current agent status
