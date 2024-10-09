@@ -46,14 +46,48 @@ fn check_agent_running(process_name: &str) -> bool {
     output.status.success() && !output.stdout.is_empty()
 }
 
+fn check_windows_defender_status() -> bool {
+    let output = Command::new("powershell")
+        .args(&["-Command", "Get-MpComputerStatus | Select-Object -ExpandProperty RealTimeProtectionEnabled"])
+        .output()
+        .expect("Failed to execute PowerShell command");
+
+    String::from_utf8_lossy(&output.stdout).trim() == "True"
+}
+
+fn get_wazuh_status() -> String {
+    let installed = check_agent_installed("C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe");
+    let running = check_agent_running("wazuh-agent");
+    match (installed, running) {
+        (true, true) => "Installed and running".to_string(),
+        (true, false) => "Installed but not running".to_string(),
+        (false, _) => "Not installed".to_string(),
+    }
+}
+
+fn get_osquery_status() -> String {
+    let installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryi.exe");
+    let running = check_agent_running("osqueryd");
+    match (installed, running) {
+        (true, true) => "Installed and running".to_string(),
+        (true, false) => "Installed but not running".to_string(),
+        (false, _) => "Not installed".to_string(),
+    }
+}
+
+fn get_windows_defender_status() -> String {
+    if check_windows_defender_status() {
+        "Real-time protection enabled".to_string()
+    } else {
+        "Real-time protection disabled".to_string()
+    }
+}
+
 fn get_current_icon() -> Icon {
-    let wazuh_installed = check_agent_installed("C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe");
-    let osquery_installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryi.exe");
+    let wazuh_status = get_wazuh_status();
+    let osquery_status = get_osquery_status();
 
-    let wazuh_running = check_agent_running("wazuh-agent");
-    let osquery_running = check_agent_running("osqueryd");
-
-    match (wazuh_installed && wazuh_running, osquery_installed && osquery_running) {
+    match (wazuh_status.contains("running"), osquery_status.contains("running")) {
         (true, true) => Icon::BothAgents,
         (true, false) => Icon::WazuhOnly,
         (false, true) => Icon::OsqueryOnly,
@@ -86,21 +120,21 @@ fn send_toast_notification(title: &str, message: &str) -> windows::core::Result<
     Ok(())
 }
 
-fn update_status(tray: &mut TrayItem, label_id: u32) {
+fn update_status(tray: &mut TrayItem, wazuh_id: u32, osquery_id: u32, defender_id: u32) {
     let new_icon = get_current_icon();
     tray.set_icon(new_icon.resource()).unwrap();
     
-    let status_message = match new_icon {
-        Icon::NoAgents => "No agents installed or running",
-        Icon::WazuhOnly => "Wazuh agent installed and running",
-        Icon::OsqueryOnly => "osquery installed and running",
-        Icon::BothAgents => "Both agents installed and running",
-    };
+    let wazuh_status = get_wazuh_status();
+    let osquery_status = get_osquery_status();
+    let defender_status = get_windows_defender_status();
 
-    tray.inner_mut().set_label(status_message, label_id).unwrap();
+    tray.inner_mut().set_label(&format!("Wazuh: {}", wazuh_status), wazuh_id).unwrap();
+    tray.inner_mut().set_label(&format!("Osquery: {}", osquery_status), osquery_id).unwrap();
+    tray.inner_mut().set_label(&format!("Windows Defender: {}", defender_status), defender_id).unwrap();
 
     // Send a toast notification with sound
-    if let Err(e) = send_toast_notification("Agent Status Update", status_message) {
+    let status_message = format!("Wazuh: {}\nOsquery: {}\nWindows Defender: {}", wazuh_status, osquery_status, defender_status);
+    if let Err(e) = send_toast_notification("Agent Status Update", &status_message) {
         eprintln!("Failed to send toast notification: {:?}", e);
     }
 }
@@ -113,7 +147,9 @@ fn main() {
     )
     .unwrap();
 
-    let label_id = tray.inner_mut().add_label_with_id("Agent Status").unwrap();
+    let wazuh_id = tray.inner_mut().add_label_with_id("Wazuh Status").unwrap();
+    let osquery_id = tray.inner_mut().add_label_with_id("Osquery Status").unwrap();
+    let defender_id = tray.inner_mut().add_label_with_id("Windows Defender Status").unwrap();
 
     tray.inner_mut().add_separator().unwrap();
 
@@ -140,7 +176,7 @@ fn main() {
                 break;
             }
             Ok(Message::UpdateStatus) => {
-                update_status(&mut tray, label_id);
+                update_status(&mut tray, wazuh_id, osquery_id, defender_id);
             }
             _ => {}
         }
