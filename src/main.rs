@@ -57,9 +57,9 @@ fn check_windows_defender_status() -> bool {
 
 fn get_status_emoji(running: bool) -> &'static str {
     if running {
-        "🟢" // Green circle for running
+        "🟢" 
     } else {
-        "❌" // Red cross for not running
+        "❌" 
     }
 }
 
@@ -68,9 +68,9 @@ fn get_wazuh_status() -> String {
     let running = check_agent_running("wazuh-agent");
     let emoji = get_status_emoji(running);
     match (installed, running) {
-        (true, true) => format!("{} Installed and running", emoji),
-        (true, false) => format!("{} Installed but not running", emoji),
-        (false, _) => format!("{} Not installed", emoji),
+        (true, true) => format!("Installed and running {}", emoji),
+        (true, false) => format!("Installed but not running {}", emoji),
+        (false, _) => format!("Not installed {}", emoji),
     }
 }
 
@@ -79,9 +79,9 @@ fn get_osquery_status() -> String {
     let running = check_agent_running("osqueryd");
     let emoji = get_status_emoji(running);
     match (installed, running) {
-        (true, true) => format!("{} Installed and running", emoji),
-        (true, false) => format!("{} Installed but not running", emoji),
-        (false, _) => format!("{} Not installed", emoji),
+        (true, true) => format!("Installed and running {}", emoji),
+        (true, false) => format!("Installed but not running {}", emoji),
+        (false, _) => format!("Not installed {}", emoji),
     }
 }
 
@@ -89,9 +89,9 @@ fn get_windows_defender_status() -> String {
     let running = check_windows_defender_status();
     let emoji = get_status_emoji(running);
     if running {
-        format!("{} Real-time protection enabled", emoji)
+        format!("Real-time protection enabled {}", emoji)
     } else {
-        format!("{} Real-time protection disabled", emoji)
+        format!("Real-time protection disabled {}", emoji)
     }
 }
 
@@ -140,12 +140,12 @@ fn update_status(tray: &mut TrayItem, wazuh_id: u32, osquery_id: u32, defender_i
     let osquery_status = get_osquery_status();
     let defender_status = get_windows_defender_status();
 
-    tray.inner_mut().set_label(&format!("Wazuh: {}", wazuh_status), wazuh_id).unwrap();
+    tray.inner_mut().set_label(&format!("OpenArmor: {}", wazuh_status), wazuh_id).unwrap();
     tray.inner_mut().set_label(&format!("Osquery: {}", osquery_status), osquery_id).unwrap();
     tray.inner_mut().set_label(&format!("Windows Defender: {}", defender_status), defender_id).unwrap();
 
     // Send a toast notification with sound
-    let status_message = format!("Wazuh: {}\nOsquery: {}\nWindows Defender: {}", wazuh_status, osquery_status, defender_status);
+    let status_message = format!("OpenArmor: {}\nOsquery: {}\nWindows Defender: {}", wazuh_status, osquery_status, defender_status);
     if let Err(e) = send_toast_notification("Agent Status Update", &status_message) {
         eprintln!("Failed to send toast notification: {:?}", e);
     }
@@ -159,9 +159,9 @@ fn main() {
     )
     .unwrap();
 
-    let wazuh_id = tray.inner_mut().add_label_with_id("Wazuh Status").unwrap();
-    let osquery_id = tray.inner_mut().add_label_with_id("Osquery Status").unwrap();
-    let defender_id = tray.inner_mut().add_label_with_id("Windows Defender Status").unwrap();
+    let defender_id = tray.inner_mut().add_label_with_id("Endpoint Protection").unwrap();
+    let osquery_id = tray.inner_mut().add_label_with_id("User Behavior Analysis").unwrap();
+    let wazuh_id = tray.inner_mut().add_label_with_id("EndPoint Detection & Response").unwrap();
 
     tray.inner_mut().add_separator().unwrap();
 
