@@ -109,9 +109,10 @@ fn get_current_icon() -> Icon {
 
 fn send_toast_notification(title: &str, message: &str) -> windows::core::Result<()> {
     let toast_xml = XmlDocument::new()?;
+    let escaped_message = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     let xml_string = format!(
-        "<toast duration=\"short\"><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual><audio src=\"ms-winsoundevent:Notification.Default\"/></toast>",
-        title, message
+        "<toast duration=\"short\"><visual><binding template=\"ToastGeneric\"><text>{}</text><text><![CDATA[{}]]></text></binding></visual><audio src=\"ms-winsoundevent:Notification.Default\"/></toast>",
+        title, escaped_message
     );
     toast_xml.LoadXml(&HSTRING::from(xml_string))?;
 
@@ -145,12 +146,12 @@ fn update_status(tray: &mut TrayItem, wazuh_id: u32, osquery_id: u32, defender_i
     }
 
     let status_message = format!(
-        "Endpoint Detection & Response: {}\nUser Behavior Analysis: {}\nWindows Defender: {}",
+        "EDR: {}\nUBA: {}\nDefender: {}",
         wazuh_status, osquery_status, defender_status
     );
-    if let Err(e) = send_toast_notification("Security Agent Status Update", &status_message) {
+    if let Err(e) = send_toast_notification("Security Agent Status", &status_message) {
         eprintln!("Failed to send status notification: {:?}", e);
-        eprintln!("Notification title: 'Security Agent Status Update'");
+        eprintln!("Notification title: 'Security Agent Status'");
         eprintln!("Notification message: '{}'", status_message);
     }
 }
