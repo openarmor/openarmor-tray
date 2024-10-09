@@ -125,7 +125,7 @@ fn send_toast_notification(title: &str, message: &str) -> windows::core::Result<
     Ok(())
 }
 
-fn update_status(tray: &mut TrayItem, wazuh_id: u32, osquery_id: u32, defender_id: u32) {
+fn update_status(tray: &mut TrayItem, wazuh_id: u32, osquery_id: u32, defender_id: u32) -> (bool, bool, bool) {
     let new_icon = get_current_icon();
     if let Err(e) = tray.set_icon(new_icon.resource()) {
         eprintln!("Failed to set tray icon: {:?}", e);
@@ -149,17 +149,23 @@ fn update_status(tray: &mut TrayItem, wazuh_id: u32, osquery_id: u32, defender_i
         "EDR: {}\nUBA: {}\nDefender: {}",
         wazuh_status, osquery_status, defender_status
     );
-    if let Err(e) = send_toast_notification("Security Agent Status", &status_message) {
+    if let Err(e) = send_toast_notification("OpenArmor Agent Status", &status_message) {
         eprintln!("Failed to send status notification: {:?}", e);
-        eprintln!("Notification title: 'Security Agent Status'");
+        eprintln!("Notification title: 'OpenArmor Agent Status'");
         eprintln!("Notification message: '{}'", status_message);
     }
+
+    (
+        wazuh_status.contains("Active"),
+        osquery_status.contains("Active"),
+        defender_status.contains("active"),
+    )
 }
 
 fn main() {
     let current_icon = get_current_icon();
     let mut tray = TrayItem::new(
-        "Security Agent Status",
+        "OpenArmor Agent Status",
         current_icon.resource(),
     )
     .unwrap();
@@ -180,20 +186,34 @@ fn main() {
 
     let update_tx = tx.clone();
     thread::spawn(move || {
+        let mut last_status = (false, false, false);
         loop {
-            update_tx.send(Message::UpdateStatus).unwrap();
-            thread::sleep(Duration::from_secs(300)); // Update every 5 minutes
+            thread::sleep(Duration::from_secs(5)); // Check every 5 seconds
+            let current_status = (
+                check_agent_running("wazuh-agent"),
+                check_agent_running("osqueryd"),
+                check_windows_defender_status(),
+            );
+            if current_status != last_status {
+                update_tx.send(Message::UpdateStatus).unwrap();
+                last_status = current_status;
+            }
         }
     });
 
+    let mut last_full_status = (false, false, false);
     loop {
         match rx.recv() {
             Ok(Message::Quit) => {
-                println!("Exiting Security Agent Status Monitor");
+                println!("Exiting OpenArmor Agent Status Monitor");
                 break;
             }
             Ok(Message::UpdateStatus) => {
-                update_status(&mut tray, wazuh_id, osquery_id, defender_id);
+                let current_full_status = update_status(&mut tray, wazuh_id, osquery_id, defender_id);
+                if current_full_status != last_full_status {
+                    // Status changed, update immediately
+                    last_full_status = current_full_status;
+                }
             }
             _ => {}
         }
