@@ -1,8 +1,9 @@
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use std::process::Command;
 use tray_item::{IconSource, TrayItem};
+use std::path::Path;
+use std::process::Command;
 
 enum Message {
     Quit,
@@ -27,31 +28,25 @@ impl Icon {
     }
 }
 
-fn check_agent_installed(agent: &str) -> bool {
-    let output = Command::new("cmd")
-        .args(&["/C", "where", agent])
-        .output()
-        .expect("Failed to execute command");
-    
-    output.status.success()
+fn check_agent_installed(agent_path: &str) -> bool {
+    Path::new(agent_path).exists()
 }
 
-fn check_service_running(service: &str) -> bool {
-    let output = Command::new("sc")
-        .args(&["query", service])
+fn check_agent_running(process_name: &str) -> bool {
+    let output = Command::new("powershell")
+        .args(&["-Command", &format!("Get-Process {} -ErrorAction SilentlyContinue", process_name)])
         .output()
-        .expect("Failed to execute command");
+        .expect("Failed to execute PowerShell command");
 
-    String::from_utf8_lossy(&output.stdout).contains("RUNNING")
+    output.status.success() && !output.stdout.is_empty()
 }
 
 fn get_current_icon() -> Icon {
-    let wazuh_installed = check_agent_installed("wazuh-agent.exe");
-    let osquery_installed = check_agent_installed("osqueryd.exe");
+    let wazuh_installed = check_agent_installed("C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe");
+    let osquery_installed = check_agent_installed("C:\\Program Files\\osquery\\osqueryd\\osqueryd.exe");
 
-    // Check for running services
-    let wazuh_running = check_service_running("WazuhSvc");
-    let osquery_running = check_service_running("osqueryd");
+    let wazuh_running = check_agent_running("wazuh-agent");
+    let osquery_running = check_agent_running("osqueryd");
 
     match (wazuh_installed && wazuh_running, osquery_installed && osquery_running) {
         (true, true) => Icon::BothAgents,
